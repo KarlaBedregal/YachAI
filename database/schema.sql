@@ -142,13 +142,3 @@ CREATE POLICY "Achievements are viewable by everyone" ON achievements
 
 CREATE POLICY "Achievements can be created by anyone" ON achievements
     FOR INSERT WITH CHECK (true);
-
--- ==================== DATOS DE EJEMPLO (OPCIONAL) ====================
--- Usuarios de ejemplo
-INSERT INTO users (username, avatar, total_score, level) VALUES
-    ('Aventurero', 'lion', 250, 3),
-    ('Exploradora', 'unicorn', 180, 2),
-    ('Científico', 'robot', 320, 4);
-
--- Nota: Ajusta las políticas de seguridad según tus necesidades
--- Para producción, considera autenticación más estricta
