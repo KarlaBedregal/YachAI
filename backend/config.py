@@ -32,3 +32,4 @@ class Config:
     # Contexto local
     LOCAL_CONTEXT = "Perú"
     LOCAL_EXAMPLES = True
+    PORT = int(os.getenv('PORT', '5000'))

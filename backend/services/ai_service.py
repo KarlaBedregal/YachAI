@@ -3,14 +3,53 @@ from groq import Groq
 from typing import Dict, Any, List
 from models.game import GameContent, GameType, TriviaQuestion, AdventureStory, AdventureScene, MarketMission, DifficultyLevel
 from config import Config
+import re;
 
 class AIService:
     """Servicio para generar contenido educativo con IA"""
     
     def __init__(self):
         self.client = Groq(api_key=Config.GROQ_API_KEY)
-        self.model = Config.AI_MODEL
+        self.model = "llama-3.3-70b-versatile"  # Cambiado de llama-3.1-70b-versatile
         
+    
+    def _clean_json_response(self, text: str, prefer_top: str = "auto") -> str:
+        # Quitar fences de markdown
+        text = re.sub(r'```json\s*', '', text)
+        text = re.sub(r'```\s*', '', text)
+        text = text.strip()
+
+        # Intento directo: ¿ya es JSON válido?
+        try:
+            json.loads(text)
+            return text
+        except Exception:
+            pass
+
+        # Búsquedas
+        obj_match = re.search(r'\{[\s\S]*\}', text)   # objeto más amplio
+        arr_match = re.search(r'\[[\s\S]*\]', text)   # array más amplio
+
+        def _strip_comments(s: str) -> str:
+            # quita //comentarios al final de línea o fin de texto
+            return re.sub(r'//.*?(?:\n|$)', '', s)
+
+        # Preferencia explícita
+        if prefer_top == "object" and obj_match:
+            return _strip_comments(obj_match.group(0))
+        if prefer_top == "array" and arr_match:
+            return _strip_comments(arr_match.group(0))
+
+        # Heurística "auto"
+        if obj_match and ('"scenes"' in obj_match.group(0) or '"title"' in obj_match.group(0)):
+            return _strip_comments(obj_match.group(0))
+        if arr_match:
+            return _strip_comments(arr_match.group(0))
+        if obj_match:
+            return _strip_comments(obj_match.group(0))
+
+        return text
+
     def generate_game_content(self, topic: str, game_type: GameType, 
                              difficulty: DifficultyLevel = DifficultyLevel.MEDIUM,
                              age_range: str = "8-14") -> GameContent:
@@ -43,7 +82,7 @@ class AIService:
                 market_missions=market_missions,
                 age_range=age_range
             )
-    
+
     def _generate_trivia(self, topic: str, difficulty: DifficultyLevel, age_range: str) -> List[TriviaQuestion]:
         """Genera preguntas de trivia"""
         
@@ -61,20 +100,35 @@ Para cada pregunta, genera en formato JSON:
     "options": ["opción 1", "opción 2", "opción 3", "opción 4"],
     "correct_answer": 0-3 (índice de la respuesta correcta),
     "explanation": "Por qué esta es la respuesta correcta",
+    "difficulty": "{difficulty.value}",
     "intelligence_type": "linguistic" | "logical_mathematical" | "spatial" | "naturalistic" | "interpersonal"
 }}
 
-Responde SOLO con un array JSON de {Config.TRIVIA_QUESTIONS_COUNT} preguntas, sin texto adicional."""
+Genera {Config.TRIVIA_QUESTIONS_COUNT} preguntas en este formato exacto."""
 
         response = self.client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model=self.model,
+            messages=[
+                {"role": "system", "content": "Eres un asistente que SOLO responde con JSON válido, sin texto adicional."},
+                {"role": "user", "content": prompt}
+            ],
+            model=self.model,  
             temperature=Config.TEMPERATURE,
             max_tokens=Config.MAX_TOKENS,
         )
         
         try:
-            questions_data = json.loads(response.choices[0].message.content)
+            raw_response = response.choices[0].message.content
+            print(f"\n=== RESPUESTA CRUDA TRIVIA ===\n{raw_response}\n=== FIN ===\n")
+            
+            clean_response = self._clean_json_response(raw_response)
+            print(f"\n=== RESPUESTA LIMPIA TRIVIA ===\n{clean_response}\n=== FIN ===\n")
+            
+            questions_data = json.loads(clean_response)
+            
+            # Asegurar que sea una lista
+            if not isinstance(questions_data, list):
+                questions_data = [questions_data]
+            
             questions = []
             for q in questions_data:
                 questions.append(TriviaQuestion(
@@ -86,8 +140,11 @@ Responde SOLO con un array JSON de {Config.TRIVIA_QUESTIONS_COUNT} preguntas, si
                     intelligence_type=q.get("intelligence_type", "logical_mathematical")
                 ))
             return questions
-        except json.JSONDecodeError:
-            raise ValueError("Error al parsear respuesta de IA para trivia")
+        except json.JSONDecodeError as e:
+            print(f"\n❌ Error parseando trivia: {str(e)}")
+            print(f"Respuesta cruda:\n{raw_response}")
+            raise ValueError(f"Error al parsear respuesta de IA para trivia: {str(e)}")
+    
     
     def _generate_adventure(self, topic: str, difficulty: DifficultyLevel, age_range: str) -> AdventureStory:
         """Genera una historia de aventura interactiva"""
@@ -96,117 +153,233 @@ Responde SOLO con un array JSON de {Config.TRIVIA_QUESTIONS_COUNT} preguntas, si
 
 Tema educativo: {topic}
 Nivel: {difficulty.value}
-Contexto: Perú (usa lugares, animales, costumbres peruanas)
+IMPORTANTE:
+- Contexto: Perú (usa lugares, animales, costumbres peruanas)
+- Responde SOLO con el JSON, sin texto adicional
+- NO respondas solo con el array de escenas
+- La respuesta debe tener: title, introduction, scenes, conclusion, total_scenes
+- NO uses comentarios
+- Debe ser un OBJETO JSON (empieza con {{ y termina con }})
 
-Crea una aventura interactiva de 5 escenas donde el niño aprende sobre {topic}.
+Crea una aventura interactiva con EXACTAMENTE 5 escenas.
 
-Formato JSON:
+Formato JSON EXACTO:
 {{
-    "title": "Título atractivo de la aventura",
+    "title": "Título atractivo",
     "introduction": "Introducción que engancha (2-3 oraciones)",
     "scenes": [
         {{
             "scene_number": 1,
-            "description": "Descripción de la escena (3-4 oraciones)",
+            "description": "Descripción de la escena",
             "choices": [
                 {{
-                    "text": "Opción 1",
+                    "text": "Primera opción",
                     "next_scene": 2,
                     "is_correct": true,
                     "points": 10,
-                    "feedback": "¡Bien hecho! Explicación breve"
+                    "feedback": "¡Muy bien! Explicación"
                 }},
                 {{
-                    "text": "Opción 2",
+                    "text": "Segunda opción",
                     "next_scene": 2,
                     "is_correct": false,
                     "points": 5,
-                    "feedback": "Puedes hacerlo mejor. Explicación"
+                    "feedback": "Intenta de nuevo. Explicación"
                 }}
             ],
-            "learning_point": "Qué aprende el niño en esta escena"
+            "learning_point": "Qué aprende aquí"
+        }},
+        {{
+            "scene_number": 2,
+            "description": "Segunda escena...",
+            "choices": [
+                {{
+                    "text": "Opción A",
+                    "next_scene": 3,
+                    "is_correct": true,
+                    "points": 10,
+                    "feedback": "¡Correcto!"
+                }},
+                {{
+                    "text": "Opción B",
+                    "next_scene": 3,
+                    "is_correct": false,
+                    "points": 5,
+                    "feedback": "No exactamente"
+                }}
+            ],
+            "learning_point": "Lección de la escena"
+        }},
+        {{
+            "scene_number": 3,
+            "description": "Tercera escena...",
+            "choices": [
+                {{"text": "Opción 1", "next_scene": 4, "is_correct": true, "points": 10, "feedback": "¡Bien!"}},
+                {{"text": "Opción 2", "next_scene": 4, "is_correct": false, "points": 5, "feedback": "Casi"}}
+            ],
+            "learning_point": "Aprendizaje"
+        }},
+        {{
+            "scene_number": 4,
+            "description": "Cuarta escena...",
+            "choices": [
+                {{"text": "Opción X", "next_scene": 5, "is_correct": true, "points": 10, "feedback": "¡Excelente!"}},
+                {{"text": "Opción Y", "next_scene": 5, "is_correct": false, "points": 5, "feedback": "Intenta pensar mejor"}}
+            ],
+            "learning_point": "Concepto clave"
+        }},
+        {{
+            "scene_number": 5,
+            "description": "Escena final...",
+            "choices": [
+                {{"text": "Decisión final A", "next_scene": 0, "is_correct": true, "points": 10, "feedback": "¡Perfecto!"}},
+                {{"text": "Decisión final B", "next_scene": 0, "is_correct": false, "points": 5, "feedback": "Otra vez será"}}
+            ],
+            "learning_point": "Conclusión del aprendizaje"
         }}
     ],
     "conclusion": "Final de la aventura (2-3 oraciones)",
     "total_scenes": 5
 }}
 
-Responde SOLO con el JSON, sin texto adicional."""
-
+Genera SOLO el objeto JSON de la aventura."""
         response = self.client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": "Eres un asistente que SOLO responde con JSON válido, sin texto adicional."},
+                {"role": "user", "content": prompt}
+            ],
             model=self.model,
-            temperature=Config.TEMPERATURE,
+            temperature=0.7,
             max_tokens=2500,
+            response_format={"type": "json_object"}
         )
         
         try:
-            story_data = json.loads(response.choices[0].message.content)
+            raw_response = response.choices[0].message.content
+            print(f"\n=== RESPUESTA CRUDA AVENTURA ===\n{raw_response}\n=== FIN ===\n")
+            
+            clean_response = self._clean_json_response(raw_response, prefer_top="object")
+            print(f"\n=== RESPUESTA LIMPIA AVENTURA ===\n{clean_response}\n=== FIN ===\n")
+            
+            story_data = json.loads(clean_response)
+            
+            # Si es un array, tomar el primer elemento
+            if isinstance(story_data, list):
+                print("[WARN] ️ La IA devolvió un array; asumo que es la lista de escenas y la envuelvo.")
+                if story_data and all(isinstance(s, dict) and "scene_number" in s for s in story_data):
+                    story_data = {
+                        "title": f"Aventura educativa sobre {topic}",
+                        "introduction": "",
+                        "scenes": story_data,
+                        "conclusion": "",
+                        "total_scenes": len(story_data)
+                    }
+                else:
+                    raise ValueError("La IA devolvió un array inesperado; no parece una lista de escenas.")
+
+            
+            # VALIDAR estructura
+            if not isinstance(story_data, dict):
+                raise ValueError(f"La respuesta debe ser un objeto JSON, pero es: {type(story_data)}")
+            
+            if 'scenes' not in story_data:
+                raise ValueError("Falta la clave 'scenes'")
+            
+            if not isinstance(story_data['scenes'], list):
+                raise ValueError("'scenes' debe ser una lista")
+            
+            # Construir escenas
             scenes = []
-            for scene in story_data["scenes"]:
+            for scene_data in story_data["scenes"]:
+                # Validar que scene_data sea un diccionario
+                if not isinstance(scene_data, dict):
+                    print(f"� ️ Escena inválida (no es dict): {scene_data}")
+                    continue
+                
                 scenes.append(AdventureScene(
-                    scene_number=scene["scene_number"],
-                    description=scene["description"],
-                    choices=scene["choices"],
-                    learning_point=scene["learning_point"]
+                    scene_number=scene_data.get("scene_number", 0),
+                    description=scene_data.get("description", ""),
+                    choices=scene_data.get("choices", []),
+                    learning_point=scene_data.get("learning_point", "")
                 ))
             
             return AdventureStory(
-                title=story_data["title"],
-                introduction=story_data["introduction"],
+                title=story_data.get("title", "Aventura educativa"),
+                introduction=story_data.get("introduction", ""),
                 scenes=scenes,
-                conclusion=story_data["conclusion"],
-                total_scenes=story_data["total_scenes"]
+                conclusion=story_data.get("conclusion", ""),
+                total_scenes=story_data.get("total_scenes", len(scenes))
             )
-        except json.JSONDecodeError:
-            raise ValueError("Error al parsear respuesta de IA para aventura")
-    
+            
+        except json.JSONDecodeError as e:
+            print(f"\n❌ Error parseando aventura: {str(e)}")
+            print(f"Respuesta cruda:\n{raw_response}")
+            raise ValueError(f"Error al parsear respuesta de IA para aventura: {str(e)}")
+        except KeyError as e:
+            print(f"\n❌ Error de clave en aventura: {str(e)}")
+            print(f"Datos recibidos:\n{story_data}")
+            raise ValueError(f"Formato incorrecto de aventura: falta clave {str(e)}")
+        except Exception as e:
+            print(f"\n❌ Error general en aventura: {str(e)}")
+            raise ValueError(f"Error al generar aventura: {str(e)}")
+
+
     def _generate_market(self, topic: str, difficulty: DifficultyLevel, age_range: str) -> List[MarketMission]:
         """Genera misiones para el juego del mercadito"""
         
         prompt = f"""Eres un diseñador de juegos educativos para niños de {age_range} años en Perú.
 
+
 Tema: {topic}
 Nivel: {difficulty.value}
-Contexto: Mercado peruano (usa productos, monedas, situaciones locales)
 
-Crea {Config.MARKET_MISSIONS_COUNT} misiones educativas para un juego de mercado.
+IMPORTANTE:
+- Contexto: mercado peruano (productos, monedas locales)
+- Responde SOLO con un array JSON válido
+- NO agregues texto antes o después
+- NO uses comentarios
 
-Tipos de tareas:
-- "selection": elegir items correctos
-- "math": resolver problemas matemáticos con productos
-- "classification": clasificar items en categorías
-- "matching": emparejar items relacionados
-
-Formato JSON (array de {Config.MARKET_MISSIONS_COUNT} misiones):
+Formato:
 [
-    {{
-        "mission_id": 1,
-        "title": "Título de la misión",
-        "description": "Descripción clara de qué hacer",
-        "task_type": "selection",
-        "items": [
-            {{"id": "item1", "name": "Manzana", "price": 2, "category": "fruta", "image": "🍎"}},
-            {{"id": "item2", "name": "Papa", "price": 3, "category": "verdura", "image": "🥔"}}
-        ],
-        "correct_items": ["item1", "item3"],
-        "points": 10,
-        "hint": "Pista útil",
-        "intelligence_type": "logical_mathematical"
-    }}
+  {{
+    "mission_id": 1,
+    "title": "título de la misión",
+    "description": "qué debe hacer el niño",
+    "task_type": "selection",
+    "items": [
+      {{"id": "item1", "name": "Manzana", "price": 2, "category": "fruta", "image": "🍎"}},
+      {{"id": "item2", "name": "Papa", "price": 3, "category": "verdura", "image": "🥔"}}
+    ],
+    "correct_items": ["item1"],
+    "points": 10,
+    "hint": "pista útil",
+    "intelligence_type": "logical_mathematical"
+  }}
 ]
 
-Responde SOLO con el array JSON, sin texto adicional."""
-
+Genera {Config.MARKET_MISSIONS_COUNT} misiones en este formato exacto."""
         response = self.client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
+            messages=[
+                {"role": "system", "content": "Eres un asistente que SOLO responde con JSON válido, sin texto adicional."},
+                {"role": "user", "content": prompt}
+            ],
             model=self.model,
-            temperature=Config.TEMPERATURE,
+            temperature=0.7,
             max_tokens=Config.MAX_TOKENS,
         )
-        
         try:
-            missions_data = json.loads(response.choices[0].message.content)
+            raw_response = response.choices[0].message.content
+            print(f"\n=== RESPUESTA CRUDA MERCADITO ===\n{raw_response}\n=== FIN ===\n")
+            
+            clean_response = self._clean_json_response(raw_response)
+            print(f"\n=== RESPUESTA LIMPIA MERCADITO ===\n{clean_response}\n=== FIN ===\n")
+            
+            missions_data = json.loads(clean_response)
+            
+            # Asegurar que sea una lista
+            if not isinstance(missions_data, list):
+                missions_data = [missions_data]
+            
             missions = []
             for m in missions_data:
                 missions.append(MarketMission(
@@ -221,8 +394,13 @@ Responde SOLO con el array JSON, sin texto adicional."""
                     intelligence_type=m.get("intelligence_type", "logical_mathematical")
                 ))
             return missions
-        except json.JSONDecodeError:
-            raise ValueError("Error al parsear respuesta de IA para mercadito")
+        except json.JSONDecodeError as e:
+            print(f"\n❌ Error parseando mercadito: {str(e)}")
+            print(f"Respuesta cruda:\n{raw_response}")
+            raise ValueError(f"Error al parsear respuesta de IA para mercadito: {str(e)}")
+
+
+
     
     def generate_feedback(self, topic: str, score: int, max_score: int, 
                          game_type: GameType, answers: List[Dict]) -> str:

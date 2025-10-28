@@ -2,98 +2,90 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { GAME_TYPES } from '../utils/constants';
 
-const GameSelector = ({ onSelectGame }) => {
+export default function GameSelector({ onSelectGame }) {
   const games = [
     {
-      type: GAME_TYPES.TRIVIA,
+      type: 'trivia',
       title: 'Trivia',
       emoji: '🧩',
       description: 'Responde preguntas y demuestra lo que sabes',
-      color: 'from-purple-500 to-pink-500',
       features: ['Preguntas de opción múltiple', 'Explicaciones detalladas', 'Puntos por respuesta correcta'],
+      color: 'from-purple-500 to-pink-500'
     },
     {
-      type: GAME_TYPES.ADVENTURE,
+      type: 'adventure',
       title: 'Aventura',
       emoji: '🏕️',
       description: 'Vive una historia interactiva y aprende explorando',
-      color: 'from-green-500 to-blue-500',
       features: ['Historia personalizada', 'Decisiones importantes', 'Múltiples finales'],
+      color: 'from-blue-500 to-cyan-500'
     },
     {
-      type: GAME_TYPES.MARKET,
+      type: 'market',
       title: 'Mercadito',
       emoji: '🛒',
       description: 'Aprende aplicando conocimientos en situaciones reales',
-      color: 'from-blue-500 to-purple-600',
       features: ['Misiones prácticas', 'Simulación divertida', 'Aprende haciendo'],
-    },
+      color: 'from-green-500 to-emerald-500'
+    }
   ];
 
   return (
-    <div className="max-w-6xl mx-auto p-6">
-      <motion.div
-        initial={{ opacity: 0, y: -20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="text-center mb-10"
-      >
-        <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-3">
-          Elige tu modo de juego
-        </h1>
-        <p className="text-gray-600 text-lg">
-          Cada juego es una forma diferente de aprender 🎮
-        </p>
-      </motion.div>
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 to-pink-50 py-12 px-4">
+      <div className="max-w-6xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="text-center mb-12"
+        >
+          <h1 className="text-4xl font-bold text-gray-800 mb-4">
+            Elige tu modo de juego
+          </h1>
+          <p className="text-xl text-gray-600">
+            Cada juego es una forma diferente de aprender 🎮
+          </p>
+        </motion.div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        {games.map((game, index) => (
-          <motion.div
-            key={game.type}
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            whileHover={{ y: -10, scale: 1.02 }}
-            onClick={() => onSelectGame(game.type)}
-            className="cursor-pointer"
-          >
-            <div className="bg-white rounded-2xl shadow-xl overflow-hidden hover:shadow-2xl transition-all">
-              {/* Header */}
-              <div className={`bg-gradient-to-r ${game.color} p-6 text-white text-center`}>
-                <div className="text-6xl mb-3">{game.emoji}</div>
-                <h2 className="text-2xl font-bold">{game.title}</h2>
+        <div className="grid md:grid-cols-3 gap-8">
+          {games.map((game, index) => (
+            <motion.div
+              key={game.type}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.1 }}
+              whileHover={{ scale: 1.05 }}
+              className="bg-white rounded-2xl shadow-xl overflow-hidden cursor-pointer"
+              onClick={() => onSelectGame(game.type)}
+            >
+              <div className={`h-32 bg-gradient-to-r ${game.color} flex items-center justify-center`}>
+                <span className="text-7xl">{game.emoji}</span>
               </div>
-
-              {/* Content */}
+              
               <div className="p-6">
-                <p className="text-gray-700 mb-4 text-center">
+                <h2 className="text-2xl font-bold text-gray-800 mb-2">
+                  {game.title}
+                </h2>
+                <p className="text-gray-600 mb-4">
                   {game.description}
                 </p>
-
-                <div className="space-y-2">
-                  {game.features.map((feature, idx) => (
-                    <div key={idx} className="flex items-start gap-2">
-                      <span className="text-green-500 mt-1">✓</span>
-                      <span className="text-sm text-gray-600">{feature}</span>
-                    </div>
+                
+                <ul className="space-y-2">
+                  {game.features.map((feature, i) => (
+                    <li key={i} className="flex items-start text-sm text-gray-500">
+                      <span className="mr-2">✓</span>
+                      <span>{feature}</span>
+                    </li>
                   ))}
-                </div>
+                </ul>
 
-                <button
-                  className={`
-                    w-full mt-6 py-3 rounded-xl font-bold text-white
-                    bg-gradient-to-r ${game.color}
-                    hover:shadow-lg transition-all
-                  `}
-                >
+                <button className={`w-full mt-6 py-3 px-6 bg-gradient-to-r ${game.color} text-white font-bold rounded-lg hover:shadow-lg transition-all`}>
                   Jugar {game.title}
                 </button>
               </div>
-            </div>
-          </motion.div>
-        ))}
+            </motion.div>
+          ))}
+        </div>
       </div>
     </div>
   );
-};
-
-export default GameSelector;
+}

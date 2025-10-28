@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from services import AIService, SupabaseService
 from models.game import GameType, DifficultyLevel
+from datetime import datetime  # ← AGREGAR ESTO
 
 game_bp = Blueprint('games', __name__, url_prefix='/api/games')
 ai_service = AIService()
@@ -38,12 +39,19 @@ def start_game():
             age_range=age_range
         )
         
-        # Crear sesión
+        # Convertir a dict para guardar en DB
+        content_dict = content.model_dump()
+        
+        # ARREGLO: Convertir datetime a string ISO
+        if 'generated_at' in content_dict:
+            content_dict['generated_at'] = content_dict['generated_at'].isoformat()
+        
+        # Crear sesión en base de datos
         session = db.create_game_session(
             user_id=user_id,
             topic=topic,
             game_type=game_type_str,
-            content=content.model_dump()
+            content=content_dict
         )
         
         return jsonify({
@@ -52,6 +60,7 @@ def start_game():
         }), 201
         
     except Exception as e:
+        print(f"Error en start_game: {str(e)}")  # ← Ver el error en consola
         return jsonify({"error": f"Error al iniciar juego: {str(e)}"}), 500
 
 @game_bp.route('/<session_id>', methods=['GET'])
@@ -67,10 +76,10 @@ def get_game(session_id):
         return jsonify({"error": str(e)}), 500
 
 @game_bp.route('/<session_id>/submit', methods=['POST'])
-def submit_game():
+def submit_game(session_id):  
     """Envía las respuestas y completa el juego"""
     try:
-        session_id = request.view_args['session_id']
+        # session_id ya viene del parámetro de la ruta
         data = request.get_json()
         
         answers = data.get('answers', [])
@@ -134,7 +143,11 @@ def submit_game():
         }), 200
         
     except Exception as e:
+        print(f"\n❌ Error en submit_game: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Error al enviar juego: {str(e)}"}), 500
+
 
 def calculate_score(content, answers, game_type):
     """Calcula el puntaje según el tipo de juego"""
