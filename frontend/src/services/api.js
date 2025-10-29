@@ -11,12 +11,15 @@ const api = axios.create({
 
 // ========== USUARIOS ==========
 
-export const registerUser = async (username, avatar, email = null) => {
-  const response = await api.post('/api/users/register', {
-    username,
-    avatar,
-    email,
-  });
+export const registerUser = async (userData) => {
+  const response = await api.post('/api/users/register', userData);
+  return response.data;
+};
+
+export const loginUser = async (credentials) => {
+  console.log('Enviando login:', credentials); // ← DEBUG
+  const response = await api.post('/api/users/login', credentials);
+  console.log('Respuesta login:', response.data); // ← DEBUG
   return response.data;
 };
 

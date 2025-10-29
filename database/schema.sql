@@ -5,9 +5,12 @@
 CREATE TABLE IF NOT EXISTS users (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     username VARCHAR(20) UNIQUE NOT NULL,
+    password VARCHAR(255) NOT NULL,
     avatar VARCHAR(50) NOT NULL,
     email VARCHAR(255),
+    age INTEGER CHECK (age >= 5 AND age <= 18),
     total_score INTEGER DEFAULT 0,
+    total_coins INTEGER DEFAULT 0,
     level INTEGER DEFAULT 1,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
@@ -15,6 +18,8 @@ CREATE TABLE IF NOT EXISTS users (
 -- Índices para users
 CREATE INDEX idx_users_username ON users(username);
 CREATE INDEX idx_users_total_score ON users(total_score DESC);
+CREATE INDEX idx_users_age ON users(age);
+CREATE INDEX idx_users_total_coins ON users(total_coins DESC);
 
 -- ==================== TABLA: game_sessions ====================
 CREATE TABLE IF NOT EXISTS game_sessions (
@@ -22,12 +27,15 @@ CREATE TABLE IF NOT EXISTS game_sessions (
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     topic VARCHAR(255) NOT NULL,
     game_type VARCHAR(20) NOT NULL CHECK (game_type IN ('trivia', 'adventure', 'market')),
-    content JSONB NOT NULL,
+    difficulty VARCHAR(20) DEFAULT 'medium',
+    age_range VARCHAR(10) DEFAULT '8-14',
+    status VARCHAR(20) DEFAULT 'in_progress',
+    content JSONB,
     score INTEGER DEFAULT 0,
+    answers JSONB DEFAULT '[]'::jsonb,
     completed BOOLEAN DEFAULT FALSE,
     started_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-    completed_at TIMESTAMP WITH TIME ZONE,
-    answers JSONB DEFAULT '[]'::jsonb
+    completed_at TIMESTAMP WITH TIME ZONE
 );
 
 -- Índices para game_sessions

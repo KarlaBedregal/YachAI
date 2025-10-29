@@ -12,35 +12,97 @@ def register_user():
     try:
         data = request.get_json()
         
+        print(f"📥 Datos recibidos: {data}")
+        
+        if not data:
+            return jsonify({"error": "No se enviaron datos"}), 400
+        
+        username = data.get('username')
+        password = data.get('password')  # ← NUEVO
+        avatar = data.get('avatar', 'default')
+        age = data.get('age')  # ← NUEVO
+        email = data.get('email')
+        
+        # Validaciones
+        if not username:
+            return jsonify({"error": "El username es requerido"}), 400
+        
+        if not password:
+            return jsonify({"error": "La contraseña es requerida"}), 400
+        
+        if not age:
+            return jsonify({"error": "La edad es requerida"}), 400
+        
         # Validar con Pydantic
-        user_data = User(
-            username=data.get('username'),
-            avatar=data.get('avatar'),
-            email=data.get('email')
-        )
+        try:
+            user_data = User(
+                username=username,
+                password=password,
+                avatar=avatar,
+                age=age,
+                email=email
+            )
+        except ValidationError as ve:
+            print(f"❌ Error de validación: {ve}")
+            return jsonify({
+                "error": "Datos inválidos",
+                "details": ve.errors()
+            }), 400
         
         # Verificar si el username ya existe
-        existing = db.get_user_by_username(user_data.username)
-        if existing:
-            return jsonify({"error": "El nombre de usuario ya existe"}), 400
+        existing_user = db.get_user_by_username(username)
+        if existing_user:
+            return jsonify({"error": "El username ya existe"}), 400
         
         # Crear usuario
-        user = db.create_user(
-            username=user_data.username,
-            avatar=user_data.avatar,
-            email=user_data.email
+        new_user = db.create_user(
+            username=username,
+            password=password,
+            avatar=avatar,
+            age=age,
+            email=email
         )
+        
+        print(f"✅ Usuario creado: {new_user}")
         
         return jsonify({
             "message": "Usuario creado exitosamente",
-            "user": user
+            "user": new_user
         }), 201
         
-    except ValidationError as e:
-        return jsonify({"error": "Datos inválidos", "details": e.errors()}), 400
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"❌ Error en register_user: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Error al crear usuario: {str(e)}"}), 500
 
+@user_bp.route('/login', methods=['POST'])
+def login_user():
+    """Inicia sesión"""
+    try:
+        data = request.get_json()
+        
+        username = data.get('username')
+        password = data.get('password')
+        
+        if not username or not password:
+            return jsonify({"error": "Username y contraseña son requeridos"}), 400
+        
+        # Autenticar
+        user = db.authenticate_user(username, password)
+        
+        if user:
+            return jsonify({
+                "message": "Login exitoso",
+                "user": user
+            }), 200
+        else:
+            return jsonify({"error": "Credenciales inválidas"}), 401
+            
+    except Exception as e:
+        print(f"❌ Error en login_user: {str(e)}")
+        return jsonify({"error": str(e)}), 500
+        
 @user_bp.route('/<user_id>', methods=['GET'])
 def get_user(user_id):
     """Obtiene información de un usuario"""

@@ -1,110 +1,114 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { loginUser } from '../services/api';
 import { getUserByUsername } from '../services/api';
 import { useUserStore } from '../store/userStore';
 
-const Login = () => {
-  const navigate = useNavigate();
-  const setUser = useUserStore((state) => state.setUser);
-  
+
+export default function Login() {
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  
+  const navigate = useNavigate();
+  const setUser = useUserStore((state) => state.setUser);
 
-  const handleLogin = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!username || username.length < 3) {
-      setError('El nombre debe tener al menos 3 caracteres');
-      return;
-    }
-
+    console.log('Intentando login...'); // ← DEBUG
+    console.log('Username:', username);
+    console.log('Password:', password);
+    
     setLoading(true);
     setError('');
 
     try {
-      const user = await getUserByUsername(username);
-      setUser(user);
+      console.log('Llamando a loginUser...'); // ← DEBUG
+      
+      const response = await loginUser({
+        username: username.trim(),
+        password: password.trim(),
+      });
+      
+      console.log('Login exitoso:', response); // ← DEBUG
+
+      setUser(response.user);
       navigate('/dashboard');
     } catch (err) {
-      if (err.response?.status === 404) {
-        setError('Usuario no encontrado. ¿Quieres crear una cuenta nueva?');
-      } else {
-        setError(err.response?.data?.error || 'Error al iniciar sesión');
-      }
+      console.error('Error en login:', err); // ← DEBUG
+      console.error('Error completo:', err.response); // ← DEBUG
+      
+      setError(err.response?.data?.error || 'Credenciales inválidas');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-400 via-pink-400 to-blue-400 flex items-center justify-center p-6">
+    <div className="container-center bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-3xl shadow-2xl p-10 max-w-md w-full"
+        className="card max-w-md w-full"
       >
-        <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🎮</div>
-          <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-            Bienvenido de Vuelta
-          </h1>
-          <p className="text-gray-600">Ingresa tu nombre de usuario</p>
-        </div>
+        <h1 className="title-gradient text-center mb-8">
+          🔐 Iniciar Sesión
+        </h1>
 
-        <form onSubmit={handleLogin} className="space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2">
-              Nombre de Usuario
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Usuario
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Tu nombre de jugador"
-              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none transition-all"
-              autoFocus
+              placeholder="Tu nombre de usuario"
+              className="w-full"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Contraseña
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Tu contraseña"
+              className="w-full"
             />
           </div>
 
           {error && (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="p-4 bg-red-100 border-2 border-red-300 rounded-xl text-red-700 text-sm"
-            >
-              {error}
-            </motion.div>
+            <div className="bg-red-100 border-2 border-red-300 rounded-xl p-4 text-red-700">
+              ⚠️ {error}
+            </div>
           )}
 
           <button
             type="submit"
-            disabled={loading || !username}
-            className={`
-              w-full py-3 rounded-xl font-bold text-white
-              ${loading || !username
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 shadow-lg'
-              }
-            `}
+            disabled={loading}
+            className="btn-primary w-full disabled:opacity-50"
           >
-            {loading ? 'Ingresando...' : 'Ingresar'}
+            {loading ? 'Iniciando...' : 'Entrar'}
           </button>
         </form>
 
         <div className="mt-6 text-center">
-          <p className="text-gray-600 mb-2">¿No tienes cuenta?</p>
           <button
             onClick={() => navigate('/')}
-            className="text-purple-600 hover:text-purple-700 font-bold"
+            className="text-purple-600 hover:underline"
           >
-            Crear cuenta nueva
+            ← Volver al registro
           </button>
         </div>
       </motion.div>
     </div>
   );
-};
-
-export default Login;
+}

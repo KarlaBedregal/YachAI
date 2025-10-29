@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify
 from services import AIService, SupabaseService
 from models.game import GameType, DifficultyLevel
-from datetime import datetime  # ← AGREGAR ESTO
+from datetime import datetime  
 
 game_bp = Blueprint('games', __name__, url_prefix='/api/games')
 ai_service = AIService()
@@ -12,15 +12,16 @@ def start_game():
     """Inicia una nueva sesión de juego"""
     try:
         data = request.get_json()
-        
+        print(f"Datos recibidos para iniciar juego: {data}")
+
         user_id = data.get('user_id')
         topic = data.get('topic')
         game_type_str = data.get('game_type', 'trivia')
         difficulty_str = data.get('difficulty', 'medium')
         age_range = data.get('age_range', '8-14')
-        
-        if not user_id or not topic:
-            return jsonify({"error": "user_id y topic son requeridos"}), 400
+
+        if not all([user_id, topic, game_type_str]):
+            return jsonify({"error": "Faltan datos requeridos"}), 400
         
         # Verificar que el usuario existe
         user = db.get_user(user_id)
@@ -28,40 +29,144 @@ def start_game():
             return jsonify({"error": "Usuario no encontrado"}), 404
         
         # Convertir a enums
-        game_type = GameType(game_type_str)
-        difficulty = DifficultyLevel(difficulty_str)
+        try:
+            game_type = GameType(game_type_str)
+            difficulty = DifficultyLevel(difficulty_str)
+        except ValueError as e:
+            return jsonify({"error": f"Tipo de juego o dificultad inválidos: {str(e)}"}), 400
+        
+        print(f"   Generando contenido con IA...")
+        print(f"   Tema: {topic}")
+        print(f"   Tipo: {game_type.value}")
+        print(f"   Dificultad: {difficulty.value}")
         
         # Generar contenido con IA
-        content = ai_service.generate_game_content(
+        game_content = ai_service.generate_game_content(
             topic=topic,
             game_type=game_type,
             difficulty=difficulty,
             age_range=age_range
         )
-        
-        # Convertir a dict para guardar en DB
-        content_dict = content.model_dump()
-        
-        # ARREGLO: Convertir datetime a string ISO
+
+        print(f"Contenido del juego generado: {game_content}")
+
+        # Convertir contenido a dict
+        content_dict = game_content.model_dump()
         if 'generated_at' in content_dict:
             content_dict['generated_at'] = content_dict['generated_at'].isoformat()
-        
-        # Crear sesión en base de datos
+
         session = db.create_game_session(
             user_id=user_id,
             topic=topic,
             game_type=game_type_str,
-            content=content_dict
+            difficulty=difficulty.value,
+            age_range=age_range,
+            content=content_dict 
         )
         
-        return jsonify({
+        print(f" Sesión creada: {session['id']}")
+
+        # Convertir contenido a dict
+        content_dict = game_content.model_dump()
+        
+        # Convertir datetime a string ISO
+        if 'generated_at' in content_dict:
+            content_dict['generated_at'] = content_dict['generated_at'].isoformat()
+
+        # Devolver sesión con contenido
+        response_data = {
             "message": "Sesión de juego creada",
             "session": session
-        }), 201
+        }
+        
+        return jsonify(response_data), 201
         
     except Exception as e:
-        print(f"Error en start_game: {str(e)}")  # ← Ver el error en consola
+        print(f"Error en start_game: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": f"Error al iniciar juego: {str(e)}"}), 500
+
+@game_bp.route('/<session_id>/submit', methods=['POST'])
+def submit_game(session_id):
+    """Envía las respuestas y completa el juego"""
+    try:
+        data = request.get_json()
+        
+        print(f"Enviando respuestas para sesión: {session_id}")
+        print(f"   Respuestas: {data}")
+        
+        answers = data.get('answers', [])
+        
+        session = db.get_game_session(session_id)
+        if not session:
+            return jsonify({"error": "Sesión no encontrada"}), 404
+        
+        if session.get('completed'):
+            return jsonify({"error": "Esta sesión ya fue completada"}), 400
+        
+        if not session.get('content'):
+            return jsonify({"error": "La sesión no tiene contenido"}), 400
+        
+        score, max_score, intelligence_analysis = calculate_score(
+            session['content'], 
+            answers, 
+            session['game_type']
+        )
+        
+        coins = score // 10
+
+        db.update_game_session(session_id, score, answers, status="completed")
+        
+        db.update_user_score(
+            user_id=session['user_id'],
+            score=score,
+            coins=coins
+        )
+        
+        feedback = ai_service.generate_feedback(
+            topic=session['topic'],
+            score=score,
+            max_score=max_score,
+            game_type=GameType(session['game_type']),
+            answers=answers
+        )
+        
+        percentage = (score / max_score * 100) if max_score > 0 else 0
+        recommendations = []
+        
+        if percentage >= 80:
+            recommendations.append("¡Excelente trabajo! Intenta un nivel más difícil")
+        elif percentage >= 60:
+            recommendations.append("¡Buen trabajo! Sigue practicando para mejorar")
+        else:
+            recommendations.append("Sigue intentándolo. La práctica hace al maestro")
+        
+        response = {
+            "result": {
+                "session_id": session_id,
+                "topic": session['topic'],
+                "game_type": session['game_type'],
+                "score": score,
+                "max_score": max_score,
+                "coins_earned": coins,
+                "percentage": percentage,
+                "feedback": feedback,
+                "intelligence_analysis": intelligence_analysis,
+                "recommendations": recommendations
+            }
+        }
+        
+        print(f"Juego completado - Score: {score}/{max_score} ({percentage:.1f}%)")
+        
+        return jsonify(response), 200
+        
+    except Exception as e:
+        print(f"Error en submit_game: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 
 @game_bp.route('/<session_id>', methods=['GET'])
 def get_game(session_id):
@@ -75,79 +180,6 @@ def get_game(session_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-@game_bp.route('/<session_id>/submit', methods=['POST'])
-def submit_game(session_id):  
-    """Envía las respuestas y completa el juego"""
-    try:
-        # session_id ya viene del parámetro de la ruta
-        data = request.get_json()
-        
-        answers = data.get('answers', [])
-        
-        # Obtener sesión
-        session = db.get_game_session(session_id)
-        if not session:
-            return jsonify({"error": "Sesión no encontrada"}), 404
-        
-        if session['completed']:
-            return jsonify({"error": "Esta sesión ya fue completada"}), 400
-        
-        # Calcular puntaje
-        score, max_score, intelligence_analysis = calculate_score(
-            session['content'], 
-            answers, 
-            session['game_type']
-        )
-        
-        # Actualizar sesión
-        db.update_game_session(session_id, score, answers, completed=True)
-        
-        # Generar feedback con IA
-        feedback = ai_service.generate_feedback(
-            topic=session['topic'],
-            score=score,
-            max_score=max_score,
-            game_type=GameType(session['game_type']),
-            answers=answers
-        )
-        
-        # Generar recomendaciones (simplificado)
-        recommendations = generate_recommendations(
-            session['topic'], 
-            score, 
-            max_score
-        )
-        
-        # Guardar resultado
-        result = db.save_game_result(
-            session_id=session_id,
-            user_id=session['user_id'],
-            topic=session['topic'],
-            game_type=session['game_type'],
-            score=score,
-            max_score=max_score,
-            feedback=feedback,
-            intelligence_analysis=intelligence_analysis,
-            recommendations=recommendations
-        )
-        
-        # Actualizar puntaje del usuario
-        db.update_user_score(session['user_id'], score)
-        
-        # Verificar logros
-        check_achievements(session['user_id'], score, session['game_type'])
-        
-        return jsonify({
-            "message": "Juego completado",
-            "result": result
-        }), 200
-        
-    except Exception as e:
-        print(f"\n❌ Error en submit_game: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return jsonify({"error": f"Error al enviar juego: {str(e)}"}), 500
-
 
 def calculate_score(content, answers, game_type):
     """Calcula el puntaje según el tipo de juego"""
@@ -158,7 +190,11 @@ def calculate_score(content, answers, game_type):
         "logical_mathematical": 0,
         "spatial": 0,
         "naturalistic": 0,
-        "interpersonal": 0
+        "interpersonal": 0,
+        "intrapersonal": 0,
+        "musical": 0,
+        "bodily_kinesthetic": 0
+
     }
     
     if game_type == 'trivia':
@@ -222,24 +258,6 @@ def calculate_score(content, answers, game_type):
     
     return score, max_score, intelligence_analysis
 
-def generate_recommendations(topic, score, max_score):
-    """Genera recomendaciones de temas"""
-    percentage = (score / max_score * 100) if max_score > 0 else 0
-    
-    recommendations = []
-    
-    if percentage < 60:
-        recommendations.append(f"Repasa: {topic}")
-        recommendations.append("Practica más con ejercicios similares")
-    elif percentage < 80:
-        recommendations.append(f"¡Buen trabajo! Refuerza {topic}")
-        recommendations.append("Intenta el siguiente nivel de dificultad")
-    else:
-        recommendations.append(f"¡Excelente! Dominas {topic}")
-        recommendations.append("Explora temas relacionados")
-    
-    return recommendations
-
 def check_achievements(user_id, score, game_type):
     """Verifica y otorga logros"""
     # Obtener estadísticas
@@ -261,7 +279,7 @@ def check_achievements(user_id, score, game_type):
         db.add_achievement(
             user_id=user_id,
             achievement_type="veteran",
-            title="⭐ Veterano",
+            title="Veterano",
             description="¡Completaste 10 juegos!"
         )
     
@@ -270,6 +288,16 @@ def check_achievements(user_id, score, game_type):
         db.add_achievement(
             user_id=user_id,
             achievement_type="perfect_score",
-            title="💯 Puntuación Perfecta",
+            title="Puntuación Perfecta",
             description="¡Obtuviste más de 100 puntos en un juego!"
         )
+@game_bp.route('/user/<user_id>/sessions', methods=['GET'])
+def get_user_sessions(user_id):
+    """Obtiene las sesiones de un usuario"""
+    try:
+        limit = request.args.get('limit', 10, type=int)
+        sessions = db.get_user_game_sessions(user_id, limit)
+        return jsonify(sessions), 200
+    except Exception as e:
+        print(f"Error en get_user_sessions: {str(e)}")
+        return jsonify({"error": str(e)}), 500

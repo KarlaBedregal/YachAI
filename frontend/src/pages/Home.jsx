@@ -8,22 +8,30 @@ import { useUserStore } from '../store/userStore';
 
 export default function Home() {
   const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');  
+  const [age, setAge] = useState('');  
   const [selectedAvatar, setSelectedAvatar] = useState('lion');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
   const setUser = useUserStore((state) => state.setUser);
 
-  const handleRegister = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     
+    // Validaciones
     if (!username.trim()) {
-      setError('Por favor escribe tu nombre');
+      setError('El nombre es requerido');
       return;
     }
-
-    if (username.length < 3) {
-      setError('El nombre debe tener al menos 3 caracteres');
+    
+    if (!password.trim() || password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    
+    if (!age || age < 5 || age > 18) {
+      setError('La edad debe estar entre 5 y 18 años');
       return;
     }
 
@@ -31,74 +39,109 @@ export default function Home() {
     setError('');
 
     try {
-      const response = await registerUser(username.trim(), selectedAvatar);
+      const response = await registerUser({
+        username: username.trim(),
+        password: password.trim(),
+        avatar: selectedAvatar,
+        age: parseInt(age)
+      });
+
       setUser(response.user);
-      navigate('/dashboard');
+      navigate('/game-session');
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al crear usuario');
+      // Mostrar error detallado si viene del backend
+      if (err.response?.data?.details) {
+        const firstError = err.response.data.details[0];
+        setError(firstError.msg || err.response.data.error);
+      } else {
+        setError(err.response?.data?.error || 'Error al registrar usuario');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-600 via-pink-500 to-orange-400 flex items-center justify-center p-4">
+    <div className="container-center bg-gradient-to-br from-purple-100 via-pink-100 to-blue-100">
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8 md:p-12"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="card max-w-2xl w-full"
       >
-        {/* Logo y Título */}
-        <div className="text-center mb-8">
-          <motion.div
-            initial={{ y: -20 }}
-            animate={{ y: 0 }}
-            className="text-6xl mb-4"
-          >
-            🎮
-          </motion.div>
-          <h1 className="text-5xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
-            YachAI
+        {/* Título */}
+        <motion.div
+          initial={{ scale: 0.9 }}
+          animate={{ scale: 1 }}
+          className="text-center mb-8"
+        >
+          <h1 className="title-gradient mb-4">
+            Bienvenido a YachAI
           </h1>
           <p className="text-xl text-gray-600">
-            Aprendizaje Gamificado con IA
+            ¡Aprende jugando con inteligencia artificial! 🚀
           </p>
-        </div>
+        </motion.div>
 
         {/* Formulario */}
-        <form onSubmit={handleRegister} className="space-y-6">
-          {/* Selector de Avatar */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Username */}
           <div>
-            <label className="block text-lg font-semibold text-gray-700 mb-3">
-              Elige tu avatar:
-            </label>
-            <AvatarSelector
-              selectedAvatar={selectedAvatar}
-              onSelectAvatar={setSelectedAvatar}
-            />
-          </div>
-
-          {/* Input de Nombre */}
-          <div>
-            <label className="block text-lg font-semibold text-gray-700 mb-2">
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
               ¿Cómo te llamas?
             </label>
             <input
               type="text"
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              placeholder="Escribe tu nombre..."
-              className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 focus:border-purple-500 focus:outline-none text-lg"
+              placeholder="Tu nombre de usuario"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all outline-none"
               maxLength={20}
             />
           </div>
+
+          {/* Password */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+              Crea una contraseña
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all outline-none"
+              minLength={6}
+            />
+          </div>
+
+          {/* Age */}
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">
+             ¿Cuántos años tienes?
+            </label>
+            <input
+              type="number"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+              placeholder="Tu edad (5-18 años)"
+              min="5"
+              max="18"
+              className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:ring-2 focus:ring-purple-200 transition-all outline-none"
+            />
+          </div>
+
+          {/* Avatar */}
+          <AvatarSelector
+            selectedAvatar={selectedAvatar}
+            onSelectAvatar={setSelectedAvatar}
+          />
 
           {/* Error */}
           {error && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg"
+              className="bg-red-100 border-2 border-red-300 rounded-xl p-4 text-red-700"
             >
               {error}
             </motion.div>
@@ -106,17 +149,17 @@ export default function Home() {
 
           {/* Botón */}
           <motion.button
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
             type="submit"
             disabled={loading}
-            className="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white text-xl font-bold py-4 rounded-xl hover:shadow-lg transition-all disabled:opacity-50"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            className="btn-primary w-full text-lg disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {loading ? '⏳ Creando...' : '🚀 ¡Comenzar Aventura!'}
+            {loading ? 'Creando cuenta...' : ' ¡Comenzar a Jugar!'}
           </motion.button>
         </form>
 
-        {/* Link a Login */}
+        {/* Link a login */}
         <div className="mt-6 text-center">
           <p className="text-gray-600">
             ¿Ya tienes cuenta?{' '}

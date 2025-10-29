@@ -6,7 +6,7 @@ import Dashboard from './pages/Dashboard';
 import GameSession from './pages/GameSession';
 import Profile from './pages/Profile';
 import './styles/globals.css';
-import { useUserStore } from './store/userStore'; // ← AÑADIR ESTA LÍNEA
+import { useUserStore } from './store/userStore'; 
 
 
 function App() {

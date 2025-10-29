@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import HeaderNavbar from '../components/HeaderNavbar';
 import { useUserStore } from '../store/userStore';
 import { useGameStore } from '../store/gameStore';
 import GameSelector from '../components/GameSelector';
@@ -17,35 +18,73 @@ const GameSession = () => {
   const updateUserScore = useUserStore((state) => state.updateUserScore);
   const { currentSession, setCurrentSession, resetGame } = useGameStore();
 
-  const [step, setStep] = useState('topic'); // topic, game-type, playing, result
-  const [topic, setTopic] = useState('');
-  const [gameType, setGameType] = useState(null);
+  const [step, setStep] = useState('select'); // select, playing, result
+  const [sessionId, setSessionId] = useState(null);
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [selectedGameType, setSelectedGameType] = useState(null);
+  const [gameContent, setGameContent] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [gameResult, setGameResult] = useState(null);
 
-  if (!user) {
-    navigate('/');
-    return null;
-  }
+  useEffect(() => {
+    if (!user) {
+      navigate('/');
+    }
+  }, [user, navigate]);
 
-  const handleTopicSelect = (selectedTopic) => {
-    setTopic(selectedTopic);
-    setStep('game-type');
-  };
-
-  const handleGameTypeSelect = async (selectedGameType) => {
-    setGameType(selectedGameType);
+  const handleGameStart = async ({ topic, gameType, difficulty }) => {
     setLoading(true);
     setError('');
-
+    
     try {
-      // Iniciar sesión de juego
-      const response = await startGame(user.id, topic, selectedGameType);
-      setCurrentSession(response.session);
+      console.log('Iniciando juego:', { topic, gameType, difficulty });
+      
+      const response = await startGame(
+        user.id,
+        topic,
+        gameType,
+        difficulty,
+        `${user.age}-${user.age + 4}` // Rango de edad basado en el usuario
+      );
+
+      console.log('Respuesta del backend:', response);
+
+      if (!response.session || !response.session.id || !response.session.content) {
+        throw new Error('La respuesta del servidor no contiene los datos esperados');
+      }
+
+      const session = response.session;
+
+      setSessionId(session.id);
+      setSelectedTopic(session.topic);
+      setSelectedGameType(session.game_type);
+      setCurrentSession(session);
+
+      console.log('Contenido del juego:', session.content);
+
+      // Extraer contenido según tipo de juego
+      let content = null;
+
+      if (gameType === 'trivia' && session.content.trivia_questions) {
+        content = { questions: session.content.trivia_questions };
+      } else if (gameType === 'adventure' && session.content.adventure_story) {
+        content = { story: session.content.adventure_story };
+      } else if (gameType === 'market' && session.content.market_missions) {
+        content = { missions: session.content.market_missions };
+      }
+
+      if (!content) {
+        console.error('Contenido no encontrado. Estructura de la sesión:', session);
+        throw new Error(`No se pudo cargar el contenido del juego tipo "${gameType}"`);
+      }
+
+      setGameContent(content);
+      
       setStep('playing');
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al iniciar el juego');
+      console.error('Error al iniciar juego:', err);
+      setError(err.response?.data?.error || err.message || 'Error al iniciar el juego');
     } finally {
       setLoading(false);
     }
@@ -55,124 +94,63 @@ const GameSession = () => {
     setLoading(true);
 
     try {
-      // Enviar resultados
-      const response = await submitGame(currentSession.id, answers);
-      setGameResult(response.result);
-      updateUserScore(score);
+      console.log('Enviando respuestas:', answers);
+      
+      const result = await submitGame(sessionId, answers);
+      
+      console.log('Resultado recibido:', result);
+      
+      setGameResult(result.result);
       setStep('result');
+      
+      // Actualizar puntos del usuario
+      updateUserScore(score);
     } catch (err) {
-      setError(err.response?.data?.error || 'Error al enviar resultados');
+      console.error('Error al enviar juego:', err);
+      setError(err.response?.data?.error || 'Error al enviar el juego');
     } finally {
       setLoading(false);
     }
   };
 
+
   const handlePlayAgain = () => {
-    resetGame();
-    setTopic('');
-    setGameType(null);
+    setStep('select');
+    setGameContent(null);
+    setSessionId(null);
+    setSelectedTopic(null);
+    setSelectedGameType(null);
     setGameResult(null);
-    setStep('topic');
+    setError('');
   };
 
   const handleGoToDashboard = () => {
-    resetGame();
     navigate('/dashboard');
   };
 
-  return (
+  if (!user) {
+    return null;
+  }
+
+    return (
     <div className="min-h-screen bg-gradient-to-br from-purple-100 via-pink-100 to-blue-100 py-6">
       <AnimatePresence mode="wait">
-        {/* Topic Selection */}
-        {step === 'topic' && (
+        {/* Game Selector */}
+        {step === 'select' && !loading && (
           <motion.div
-            key="topic"
+            key="select"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="max-w-5xl mx-auto p-6"
           >
-            <div className="bg-white rounded-3xl shadow-xl p-8">
-              <h1 className="text-4xl font-bold text-center mb-3 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                ¿Qué quieres aprender hoy?
-              </h1>
-              <p className="text-center text-gray-600 mb-8">
-                Escribe cualquier tema o elige uno sugerido
-              </p>
-
-              {/* Custom Topic Input */}
-              <div className="mb-8">
-                <input
-                  type="text"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && topic && handleTopicSelect(topic)}
-                  placeholder="Ejemplo: El ciclo del agua, Animales del Perú, Matemáticas..."
-                  className="w-full px-6 py-4 text-lg border-2 border-gray-300 rounded-xl focus:border-purple-500 focus:outline-none transition-all"
-                />
-                {topic && (
-                  <motion.button
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleTopicSelect(topic)}
-                    className="w-full mt-4 py-3 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-700 hover:to-pink-700 shadow-lg"
-                  >
-                    Continuar →
-                  </motion.button>
-                )}
-              </div>
-
-              {/* Suggested Topics */}
-              <div>
-                <h3 className="text-xl font-bold mb-4 text-gray-800">
-                  📌 Temas Sugeridos
-                </h3>
-                <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {SUGGESTED_TOPICS.map((suggestedTopic) => (
-                    <motion.button
-                      key={suggestedTopic.id}
-                      whileHover={{ scale: 1.05, y: -5 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handleTopicSelect(suggestedTopic.title)}
-                      className="p-4 bg-gradient-to-br from-white to-gray-50 border-2 border-gray-200 rounded-xl hover:border-purple-400 transition-all shadow-md hover:shadow-lg text-left"
-                    >
-                      <div className="text-3xl mb-2">{suggestedTopic.emoji}</div>
-                      <h4 className="font-bold text-gray-800 mb-1">
-                        {suggestedTopic.title}
-                      </h4>
-                      <p className="text-xs text-gray-600">
-                        {suggestedTopic.category}
-                      </p>
-                    </motion.button>
-                  ))}
+            {error && (
+              <div className="max-w-6xl mx-auto mb-6 px-6">
+                <div className="bg-red-100 border-2 border-red-300 rounded-xl p-4 text-red-700">
+                  {error}
                 </div>
               </div>
-            </div>
-          </motion.div>
-        )}
-
-        {/* Game Type Selection */}
-        {step === 'game-type' && !loading && (
-          <motion.div
-            key="game-type"
-            initial={{ opacity: 0, x: 100 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -100 }}
-          >
-            <div className="max-w-6xl mx-auto mb-6 px-6">
-              <button
-                onClick={() => setStep('topic')}
-                className="px-4 py-2 bg-white rounded-lg shadow-md hover:shadow-lg transition-all"
-              >
-                ← Cambiar tema
-              </button>
-              <p className="mt-2 text-gray-700 font-medium">
-                Tema seleccionado: <span className="font-bold">{topic}</span>
-              </p>
-            </div>
-            <GameSelector onSelectGame={handleGameTypeSelect} />
+            )}
+            <GameSelector onSelectGame={handleGameStart} />
           </motion.div>
         )}
 
@@ -196,35 +174,35 @@ const GameSession = () => {
                 La IA está creando tu juego...
               </h2>
               <p className="text-gray-600">
-                Generando contenido personalizado sobre: {topic}
+                Generando contenido personalizado sobre: {selectedTopic}
               </p>
             </div>
           </motion.div>
         )}
 
         {/* Playing Game */}
-        {step === 'playing' && currentSession && !loading && (
+        {step === 'playing' && gameContent && !loading && (
           <motion.div
             key="playing"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
           >
-            {gameType === 'trivia' && (
+            {selectedGameType === 'trivia' && gameContent.questions && (
               <TriviaGame
-                questions={currentSession.content.trivia_questions}
+                questions={gameContent.questions}
                 onComplete={handleGameComplete}
               />
             )}
-            {gameType === 'adventure' && (
+            {selectedGameType === 'adventure' && gameContent.story && (
               <AdventureGame
-                story={currentSession.content.adventure_story}
+                story={gameContent.story}
                 onComplete={handleGameComplete}
               />
             )}
-            {gameType === 'market' && (
+            {selectedGameType === 'market' && gameContent.missions && (
               <MarketGame
-                missions={currentSession.content.market_missions}
+                missions={gameContent.missions}
                 onComplete={handleGameComplete}
               />
             )}
@@ -237,10 +215,11 @@ const GameSession = () => {
             key="result"
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
+            className="max-w-4xl mx-auto"
           >
             <GameResult
               result={gameResult}
-              topic={topic}
+              topic={selectedTopic}
               onPlayAgain={handlePlayAgain}
               onGoToDashboard={handleGoToDashboard}
             />
@@ -248,7 +227,7 @@ const GameSession = () => {
         )}
 
         {/* Error Message */}
-        {error && (
+        {error && step !== 'select' && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -259,7 +238,7 @@ const GameSession = () => {
               <button
                 onClick={() => {
                   setError('');
-                  setStep('topic');
+                  setStep('select');
                 }}
                 className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
               >
