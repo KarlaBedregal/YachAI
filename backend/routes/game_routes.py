@@ -123,6 +123,12 @@ def submit_game(session_id):
             score=score,
             coins=coins
         )
+        db.update_user_statistics(
+            user_id=session['user_id'],
+            game_type=session['game_type'],
+            intelligence_scores=intelligence_analysis,
+            topic=session['topic']
+        )
         
         feedback = ai_service.generate_feedback(
             topic=session['topic'],
@@ -141,7 +147,7 @@ def submit_game(session_id):
             recommendations.append("¡Buen trabajo! Sigue practicando para mejorar")
         else:
             recommendations.append("Sigue intentándolo. La práctica hace al maestro")
-        
+        check_achievements(session['user_id'], score, session['game_type'])
         response = {
             "result": {
                 "session_id": session_id,
@@ -260,37 +266,50 @@ def calculate_score(content, answers, game_type):
 
 def check_achievements(user_id, score, game_type):
     """Verifica y otorga logros"""
-    # Obtener estadísticas
-    stats = db.get_user_statistics(user_id)
-    if not stats:
-        return
-    
-    # Logro: Primera victoria
-    if stats['games_played'] == 1:
-        db.add_achievement(
-            user_id=user_id,
-            achievement_type="first_game",
-            title="🎮 Primer Juego",
-            description="¡Completaste tu primer juego en YachAI!"
-        )
-    
-    # Logro: 10 juegos completados
-    if stats['games_played'] == 10:
-        db.add_achievement(
-            user_id=user_id,
-            achievement_type="veteran",
-            title="Veterano",
-            description="¡Completaste 10 juegos!"
-        )
-    
-    # Logro: Puntuación perfecta
-    if score >= 100:
-        db.add_achievement(
-            user_id=user_id,
-            achievement_type="perfect_score",
-            title="Puntuación Perfecta",
-            description="¡Obtuviste más de 100 puntos en un juego!"
-        )
+    try:
+        # Obtener estadísticas actualizadas
+        stats = db.get_user_statistics(user_id)
+        if not stats:
+            return
+        
+        # Logro: Primera victoria
+        if stats['games_played'] == 1:
+            db.add_achievement(
+                user_id=user_id,
+                achievement_type="first_game",
+                title="🎮 Primer Juego",
+                description="¡Completaste tu primer juego en YachAI!"
+            )
+        
+        # Logro: 5 juegos completados
+        if stats['games_played'] == 5:
+            db.add_achievement(
+                user_id=user_id,
+                achievement_type="dedicated",
+                title="🔥 Dedicado",
+                description="¡Completaste 5 juegos!"
+            )
+        
+        # Logro: 10 juegos completados
+        if stats['games_played'] == 10:
+            db.add_achievement(
+                user_id=user_id,
+                achievement_type="veteran",
+                title="⭐ Veterano",
+                description="¡Completaste 10 juegos!"
+            )
+        
+        # Logro: Puntuación alta
+        if score >= 50:
+            db.add_achievement(
+                user_id=user_id,
+                achievement_type="high_score",
+                title="🌟 Súper Estrella",
+                description="¡Obtuviste más de 50 puntos en un juego!"
+            )
+    except Exception as e:
+        print(f"❌ Error verificando logros: {str(e)}")
+        
 @game_bp.route('/user/<user_id>/sessions', methods=['GET'])
 def get_user_sessions(user_id):
     """Obtiene las sesiones de un usuario"""

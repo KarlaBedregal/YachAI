@@ -291,3 +291,57 @@ class SupabaseService:
         except Exception as e:
             print(f"❌ Error en add_achievement: {str(e)}")
             return None
+
+    def update_user_statistics(self, user_id: str, game_type: str, 
+                              intelligence_scores: Dict[str, int], 
+                              topic: str) -> Optional[Dict[str, Any]]:
+        """Actualiza las estadísticas del usuario después de un juego"""
+        try:
+            # Obtener estadísticas actuales
+            stats = self.get_user_statistics(user_id)
+            if not stats:
+                # Si no existen, se crearon en get_user_statistics
+                stats = self.get_user_statistics(user_id)
+            
+            # Incrementar juegos jugados
+            new_games_played = stats['games_played'] + 1
+            
+            # Incrementar contador del tipo de juego
+            game_type_key = f"{game_type}_count"
+            new_game_type_count = stats.get(game_type_key, 0) + 1
+            
+            # Incrementar temas completados (simplificado)
+            new_topics_completed = stats.get('topics_completed', 0) + 1
+            
+            # Actualizar inteligencias
+            new_intel_scores = {}
+            for intel_type, points in intelligence_scores.items():
+                current_score = stats.get(f"{intel_type}_score", 0)
+                new_intel_scores[f"{intel_type}_score"] = current_score + points
+            
+            # Preparar datos para actualizar
+            update_data = {
+                "games_played": new_games_played,
+                game_type_key: new_game_type_count,
+                "topics_completed": new_topics_completed,
+                "updated_at": datetime.utcnow().isoformat(),
+                **new_intel_scores
+            }
+            
+            # Actualizar en Supabase
+            response = self.supabase.table("user_statistics")\
+                .update(update_data)\
+                .eq("user_id", user_id)\
+                .execute()
+            
+            if response.data:
+                print(f" Estadísticas actualizadas para {user_id}")
+                print(f"   Juegos jugados: {new_games_played}")
+                print(f"   Temas completados: {new_topics_completed}")
+                return response.data[0]
+            return None
+        except Exception as e:
+            print(f"❌ Error en update_user_statistics: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            return None
