@@ -1,14 +1,15 @@
 export const AVATARS = [
-  { id: 'cat', name: 'Gatito', emoji: '🐱' },
-  { id: 'dog', name: 'Perrito', emoji: '🐶' },
-  { id: 'fox', name: 'Zorro', emoji: '🦊' },
-  { id: 'lion', name: 'León', emoji: '🦁' },
-  { id: 'panda', name: 'Panda', emoji: '🐼' },
-  { id: 'koala', name: 'Koala', emoji: '🐨' },
-  { id: 'robot', name: 'Robot', emoji: '🤖' },
-  { id: 'alien', name: 'Alien', emoji: '👽' },
-  { id: 'unicorn', name: 'Unicornio', emoji: '🦄' },
-  { id: 'dragon', name: 'Dragón', emoji: '🐉' },
+  { id: 'cat', name: 'Gatito', image: '/avatars/1.png' },
+  { id: 'dog', name: 'Perrito', image: '/avatars/2.png' },
+  { id: 'fox', name: 'Zorro', image: '/avatars/3.png' },
+  { id: 'lion', name: 'León', image: '/avatars/4.png' },
+  { id: 'panda', name: 'Panda', image: '/avatars/5.png' },
+  { id: 'koala', name: 'Koala', image: '/avatars/6.png' },
+  { id: 'robot', name: 'Robot', image: '/avatars/7.png' },
+  { id: 'alien', name: 'Alien', image: '/avatars/8.png' },
+  { id: 'unicorn', name: 'Unicornio', image: '/avatars/9.png' },
+  { id: 'dragon', name: 'Dragón', image: '/avatars/10.png' },
+  { id: 'penguin', name: 'Pingüino', image: '/avatars/11.png' },
 ];
 
 export const GAME_TYPES = {

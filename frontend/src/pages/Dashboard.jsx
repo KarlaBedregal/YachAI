@@ -6,6 +6,7 @@ import { useGameStore } from '../store/gameStore';
 import { getUserStatistics, getLeaderboard, getUserSessions, analyzeIntelligence } from '../services/api';
 import { AVATARS, INTELLIGENCE_TYPES } from '../utils/constants';
 import { formatScore, getGameTypeLabel, formatDate } from '../utils/helpers';
+import ChatRoom from '../components/ChatRoom';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -74,19 +75,23 @@ const Dashboard = () => {
           animate={{ opacity: 1, y: 0 }}
           className="bg-white rounded-3xl shadow-xl p-8 mb-6"
         >
-          <div className="flex items-center justify-between">
+          
             <div className="flex items-center gap-6">
-              <div className="text-7xl">{avatar?.emoji}</div>
-              <div>
-                <h1 className="text-4xl font-bold text-gray-800">
-                  ¡Hola, {user.username}!
-                </h1>
-                <p className="text-xl text-gray-600 mt-1">
-                  Nivel {user.level} • {formatScore(user.total_score)} puntos
-                </p>
-              </div>
+            <div className="w-24 h-24 bg-white rounded-full shadow-lg p-2">
+              <img 
+                src={avatar?.image} 
+                alt={avatar?.name}
+                className="w-full h-full object-contain"
+              />
             </div>
-            
+            <div>
+              <h1 className="text-4xl font-bold text-gray-800">
+                ¡Hola, {user.username}!
+              </h1>
+              <p className="text-xl text-gray-600 mt-1">
+                Nivel {user.level} • {formatScore(user.total_score)} puntos
+              </p>
+            </div>
             <button
               onClick={handleNewGame}
               className="px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white font-bold rounded-xl hover:from-purple-700 hover:to-pink-700 transition-all shadow-lg text-lg"
@@ -267,7 +272,16 @@ const Dashboard = () => {
                     <div className="text-2xl font-bold text-gray-600 w-8">
                       {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `#${index + 1}`}
                     </div>
-                    <div className="text-3xl">{playerAvatar?.emoji}</div>
+                    
+                    {/* Avatar con imagen */}
+                    <div className="w-12 h-12 bg-white rounded-full shadow-md p-1">
+                      <img 
+                        src={playerAvatar?.image || '/avatars/1.png'} 
+                        alt={player.username}
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+                    
                     <div className="flex-1">
                       <p className="font-bold text-gray-800">
                         {player.username} {isCurrentUser && '(Tú)'}
@@ -285,7 +299,17 @@ const Dashboard = () => {
                   </div>
                 );
               })}
+
             </div>
+            </motion.div>
+            
+          {/* Chat Room */}
+            <motion.div
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="h-[600px]"
+            >
+              <ChatRoom />
           </motion.div>
         </div>
       </div>

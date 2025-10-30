@@ -24,7 +24,11 @@ const AvatarSelector = ({ selectedAvatar, onSelectAvatar }) => {
               }
             `}
           >
-            {avatar.emoji}
+            <img 
+              src={avatar.image} 
+              alt={avatar.name}
+              className="w-full h-full object-contain"
+            />
           </motion.button>
         ))}
       </div>

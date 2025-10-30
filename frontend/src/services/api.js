@@ -112,4 +112,27 @@ export const analyzeIntelligence = async (userId) => {
   return response.data;
 };
 
+export const getChatMessages = async (limit = 50) => {
+  const response = await api.get('/api/chat/messages', { params: { limit } });
+  return response.data;
+};
+
+export const sendChatMessage = async (userId, username, avatar, message) => {
+  const response = await api.post('/api/chat/send', {
+    user_id: userId,
+    username,
+    avatar,
+    message,
+  });
+  return response.data;
+};
+
+export const deleteChatMessage = async (messageId, userId) => {
+  const response = await api.delete(`/api/chat/delete/${messageId}`, {
+    data: { user_id: userId },
+  });
+  return response.data;
+};
+
 export default api;
+
